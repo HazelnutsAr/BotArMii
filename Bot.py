@@ -20,9 +20,15 @@ ytdl_format_options = {
     'format': 'bestaudio',
     'noplaylist': True,
     'quiet': True,
+    'js_runtimes': {'node': {}},
 }
 
 ffmpeg_options = {
+    'before_options': (
+        '-reconnect 1 '
+        '-reconnect_streamed 1 '
+        '-reconnect_delay_max 5'
+    ),
     'options': '-vn'
 }
 
@@ -42,8 +48,17 @@ async def play_next(ctx):
         data = queue.pop(0)
         current_song = data
 
+        loop = asyncio.get_event_loop()
+
+        data = await loop.run_in_executor(
+            None,
+            lambda: ytdl.extract_info(data['webpage_url'], download=False)
+        )
+
+        audio_url = data['url']
+
         source = await discord.FFmpegOpusAudio.from_probe(
-            data['url'], **ffmpeg_options
+            audio_url, **ffmpeg_options
         )
 
         ctx.voice_client.play(
@@ -53,17 +68,10 @@ async def play_next(ctx):
             )
         )
 
-        embed = discord.Embed(
-            title="กำลังเล่นเพลงนี้อยู่นะ",
-            description=data['title'],
-            color=0x370a05
-        )
-'''
-        #embed.set_thumbnail(url=data['thumbnail'])
-        await ctx.send(embed=embed)
-'''
     else:
         current_song = None
+
+
 
 @bot.command()
 async def join(ctx):
@@ -119,17 +127,32 @@ async def play(ctx, *, query):
         data = data['entries'][0]
 
     song = {
-        'title': data.get('title', 'Unknown'),
-        'url': data['url']
+        'title': data.get('title'),
+        'webpage_url': data['webpage_url']
     }
 
     queue.append(song)
 
-    await ctx.send(
-        f"เห็นว่าเธอขอให้ฉันเปิดหรอกนะ! ฉันเลยเอา {song['title']} มาใส่คิวให้ ฮึ\n"
-        f"ตอนนี้มี {len(queue)} เพลงในคิวแล้วนะ"
+    embed = discord.Embed(
+        title="เพิ่มเพลงให้แล้วนะ",
+        description=(
+            f"เห็นว่าเธอขอให้ฉันเปิดหรอกนะ!\n"
+            f"เลยเอา **{song['title']}** มาใส่คิวให้ ฮึ\n\n"
+            f"ตอนนี้มี **{len(queue)}** เพลงในคิวแล้วนะ"
+        ),
+        color=0x370a05
     )
 
+    embed.set_footer(
+        text=f"คนที่บอกให้เอาเพลงนี้ใส่มันคือ {ctx.author.display_name}",
+        icon_url=ctx.author.display_avatar.url
+    )
+
+    embed.timestamp = discord.utils.utcnow()
+
+    await ctx.send(embed=embed)
+    await ctx.message.delete()
+    
     # ถ้าไม่มีเพลงกำลังเล่น ให้เริ่มเล่นเลย
     if not ctx.voice_client.is_playing() and not current_song:
         await play_next(ctx)
@@ -164,7 +187,7 @@ async def search(ctx, *, query):
 
     embed.set_footer(text="พิมพ์เลข 1-5 เพื่อเลือกเพลง (30 วิ)")
 
-    await ctx.send(embed=embed)
+    search_message = await ctx.send(embed=embed)
 
     def check(m):
         return (
@@ -183,17 +206,29 @@ async def search(ctx, *, query):
     selected = int(reply.content) - 1
     chosen = results[selected]
 
+    await search_message.delete()
+    await reply.delete()
+    await ctx.message.delete()
+
     song = {
-        'title': chosen.get('title', 'Unknown'),
-        'url': chosen['url']
+        'title': chosen.get('title'),
+        'webpage_url': chosen['webpage_url']
     }
 
     queue.append(song)
 
-    await ctx.send(
-        f"เลือกได้ซักทีนะ หืม **{song['title']}** สินะ\n"
-        f"ใส่คิวให้แล้ว ตอนนี้มี {len(queue)} เพลงในคิว"
+    embed = discord.Embed(
+        title="ใส่เพลงเข้าคิวให้แล้วนะ",
+        description=(
+            f"เลือกได้ซักทีนะ หืม **{song['title']}** สินะ\n"
+            f"ใส่คิวให้แล้ว ตอนนี้มี {len(queue)} เพลงในคิว\n"
+        ),
+        color=0x370a05
     )
+
+    embed.set_footer(text=f"คนที่บอกให้เอาเพลงนี้ใส่มันคือ {ctx.author.display_name}")
+
+    await ctx.send(embed=embed)
 
     if not ctx.voice_client.is_playing() and not current_song:
         await play_next(ctx)
