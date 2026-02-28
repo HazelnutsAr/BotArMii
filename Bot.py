@@ -237,5 +237,5 @@ async def leave(ctx):
     if ctx.voice_client:
         await ctx.voice_client.disconnect()
 
-
+keep_alive()
 bot.run(TOKEN, reconnect=True)
