@@ -52,7 +52,7 @@ async def play_next(ctx):
                 play_next(ctx), bot.loop
             )
         )
-'''
+
         embed = discord.Embed(
             title="กำลังเล่นเพลงนี้อยู่นะ",
             description=data['title'],
@@ -61,7 +61,7 @@ async def play_next(ctx):
 '''
         #embed.set_thumbnail(url=data['thumbnail'])
         await ctx.send(embed=embed)
-
+'''
     else:
         current_song = None
 
